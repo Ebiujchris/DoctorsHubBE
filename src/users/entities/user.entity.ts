@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
-import { Notification } from '../../notifications/notification.entity';
+
 
 export enum UserRole {
   PATIENT = 'patient',
@@ -50,6 +50,5 @@ export class User {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @OneToMany(() => Notification, (notification) => notification.user)
-  notifications?: Notification[];
+  
 }
