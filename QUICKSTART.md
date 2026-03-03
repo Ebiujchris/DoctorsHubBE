@@ -169,8 +169,50 @@ CREATE TABLE users (
 4. **Additional Features**:
    - Password reset functionality
    - User profile updates
-   - Appointment booking system
+   - **Appointment booking system** (see APIs below)
    - Availability management for doctors
+
+---
+
+## Booking & Availability APIs
+All endpoints require a valid JWT obtained through `/auth/login` except where noted.
+
+### Provider Availability (doctor/nurse/psychiatrist/carer)
+| Method | Path | Body | Description |
+|--------|------|------|-------------|
+| POST | `/providers/me/availabilities` | `{ startTime, endTime }` (ISO strings) | Create a free slot. Can only create if not booked. |
+| GET  | `/providers/me/availabilities` | none | List your own availability slots. |
+| PATCH | `/providers/me/availabilities/:id` | partial `{ startTime?, endTime? }` | Edit an unbooked slot. |
+| DELETE | `/providers/me/availabilities/:id` | none | Remove an unbooked slot. |
+
+### Searching & Booking (patients)
+| Method | Path | Body | Description |
+|--------|------|------|-------------|
+| GET | `/providers` | none | Retrieve providers with at least one future, unbooked slot. Roles restricted to medical staff. Returns user info. |
+| GET | `/providers/:id/availabilities` | none | Get available time slots for a specific provider. |
+| POST | `/bookings` | `{ providerId, startTime, endTime, consultationType }` | Create a booking request. Status defaults to `pending`. Patient is notified via WhatsApp and in‑app notification. Provider receives a WhatsApp link to their dashboard. |
+| GET | `/bookings` | none | List bookings for the current user; patients see their requests, providers see requests made to them. |
+
+### Booking Actions (providers)
+| Method | Path | Body | Description |
+|--------|------|------|-------------|
+| PATCH | `/bookings/:id/status` | `{ status, meetingLink? }` | Approve/reject/cancel a booking. Changing status to `confirmed` will send messages to the patient; include `meetingLink` for video consultations. |
+
+### Notifications
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/notifications` | Retrieve in‑app notifications for the authenticated user. |
+
+> **Note:** All date-times must be in ISO 8601 string format and in UTC.
+
+### Workflow Summary
+1. Provider adds available slots.  
+2. Patient browses providers and slots, then books one.  
+3. Slot marked booked, provider/patient receive WhatsApp + in‑app notifications.  
+4. Provider confirms or rejects via dashboard link.  
+5. Patient gets final confirmation with video link or physical visit instructions.
+
+These APIs mirror the professional booking process and can be consumed by your frontend.
 
 ## Troubleshooting
 

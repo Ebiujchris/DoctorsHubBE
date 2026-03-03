@@ -5,10 +5,19 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
-  // Enable CORS for your Next.js frontend
+  // Enable CORS for frontend (local dev + production URLs)
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'https://doctors-hub-be-git-main-ebiu-julius-projects.vercel.app',
+    process.env.FRONTEND_URL, // Add from env for flexibility
+  ].filter(Boolean);
+
   app.enableCors({
-    origin: ['http://localhost:3001', 'http://localhost:3000'], // Update with your frontend URL
+    origin: allowedOrigins,
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
   // Global validation pipe

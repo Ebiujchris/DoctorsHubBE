@@ -50,5 +50,13 @@ export class User {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  
+  // relations - using lazy loading to avoid circular dependencies
+  @OneToMany('Booking', 'patient')
+  patientBookings: any[];
+
+  @OneToMany('Booking', 'provider')
+  providerBookings: any[];
+
+  @OneToMany('Availability', 'provider')
+  availabilities: any[];
 }
