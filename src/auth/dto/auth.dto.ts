@@ -20,6 +20,9 @@ export class RegisterDto {
 
   @IsEnum(UserRole)
   role: UserRole;
+
+  @IsString()
+  specialty?: string; // Optional for healthcare providers
 }
 
 export class LoginDto {
@@ -30,6 +33,11 @@ export class LoginDto {
   password: string;
 }
 
+export class GoogleLoginDto {
+  @IsString()
+  idToken: string; // Google OAuth ID token from frontend
+}
+
 export class UserResponseDto {
   id: string;
   email: string;
@@ -37,8 +45,13 @@ export class UserResponseDto {
   lastName: string;
   phone: string;
   role: UserRole;
+  specialty?: string;
   profilePicture?: string;
   bio?: string;
+  rating?: number;
+  reviews?: number;
+  experience?: string;
+  responseTime?: string;
   isVerified: boolean;
   isActive: boolean;
   createdAt: Date;

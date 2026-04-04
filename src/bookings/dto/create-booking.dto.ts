@@ -1,4 +1,4 @@
-import { IsUUID, IsEnum, IsDateString } from 'class-validator';
+import { IsUUID, IsEnum, IsDateString, IsOptional, IsString } from 'class-validator';
 import { ConsultationType } from '../booking.entity';
 
 export class CreateBookingDto {
@@ -13,4 +13,8 @@ export class CreateBookingDto {
 
   @IsEnum(ConsultationType)
   consultationType: ConsultationType;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }

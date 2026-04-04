@@ -4,7 +4,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from '../users/entities/user.entity';
-import { RegisterDto, LoginDto, AuthResponseDto, UserResponseDto } from './dto/auth.dto';
+import { RegisterDto, LoginDto, GoogleLoginDto, AuthResponseDto, UserResponseDto } from './dto/auth.dto';
+import { GoogleOAuthStrategy } from './google-oauth.strategy';
 
 @Injectable()
 export class AuthService {
@@ -12,10 +13,11 @@ export class AuthService {
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private jwtService: JwtService,
+    private googleOAuthStrategy: GoogleOAuthStrategy,
   ) {}
 
   async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
-    const { email, password, firstName, lastName, phone, role } = registerDto;
+    const { email, password, firstName, lastName, phone, role, specialty } = registerDto;
 
     // Check if user already exists
     const existingUser = await this.userRepository.findOne({ where: { email } });
@@ -34,6 +36,7 @@ export class AuthService {
       lastName,
       phone,
       role,
+      specialty: specialty || null, // Save specialty if provided
     });
 
     await this.userRepository.save(user);
@@ -78,6 +81,36 @@ export class AuthService {
     };
   }
 
+  async googleLogin(googleLoginDto: GoogleLoginDto): Promise<AuthResponseDto> {
+    const { idToken } = googleLoginDto;
+
+    // Verify Google OAuth token
+    const googlePayload = await this.googleOAuthStrategy.verifyToken(idToken);
+
+    // Find user by email (must be registered first)
+    const user = await this.userRepository.findOne({ where: { email: googlePayload.email } });
+    
+    if (!user) {
+      throw new UnauthorizedException(
+        `No account found with email ${googlePayload.email}. Please register first.`,
+      );
+    }
+
+    // Check if account is active
+    if (!user.isActive) {
+      throw new UnauthorizedException('Account is deactivated');
+    }
+
+    // Generate JWT token
+    const token = this.generateToken(user);
+
+    return {
+      user: this.formatUserResponse(user),
+      access_token: token,
+      token_type: 'Bearer',
+    };
+  }
+
   async validateUser(userId: string): Promise<User> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user || !user.isActive) {
@@ -94,7 +127,15 @@ export class AuthService {
       firstName: user.firstName,
       lastName: user.lastName,
     };
-    return this.jwtService.sign(payload);
+    console.log('🔐 SIGNING TOKEN - Payload:', payload);
+    const token = this.jwtService.sign(payload);
+    console.log('🔐 SIGNED TOKEN - First 50 chars:', token.substring(0, 50));
+    console.log('🔐 SIGNED TOKEN - Parts:', {
+      header: token.split('.')[0],
+      payload: token.split('.')[1],
+      signature: token.split('.')[2]?.substring(0, 20) + '...'
+    });
+    return token;
   }
 
   private formatUserResponse(user: User): UserResponseDto {
@@ -105,8 +146,13 @@ export class AuthService {
       lastName: user.lastName,
       phone: user.phone,
       role: user.role,
+      specialty: user.specialty,
       profilePicture: user.profilePicture,
       bio: user.bio,
+      rating: user.rating,
+      reviews: user.reviews,
+      experience: user.experience,
+      responseTime: user.responseTime,
       isVerified: user.isVerified,
       isActive: user.isActive,
       createdAt: user.createdAt,

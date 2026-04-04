@@ -6,6 +6,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { GoogleOAuthStrategy } from './google-oauth.strategy';
 import { User } from '../users/entities/user.entity';
 
 @Module({
@@ -14,16 +15,27 @@ import { User } from '../users/entities/user.entity';
     PassportModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
-      useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'),
-        signOptions: {
-          expiresIn: configService.get<string>('JWT_EXPIRATION') || '3600',
-        },
-      }),
+      useFactory: async (configService: ConfigService) => {
+        const secret = configService.get<string>('JWT_SECRET');
+        console.log('🔐 AuthModule JWT setup - Secret length:', secret?.length || 'UNDEFINED');
+        console.log('🔐 Secret value from env:', secret ? secret.substring(0, 30) + '...' : 'NOT FOUND');
+        
+        if (!secret) {
+          console.error('❌ CRITICAL: JWT_SECRET is not defined in environment variables!');
+          console.error('❌ Check your .env file and ensure JWT_SECRET is set');
+        }
+
+        return {
+          secret: secret || 'default_secret_key_change_this', // Fallback for debugging
+          signOptions: {
+            expiresIn: configService.get<string>('JWT_EXPIRATION') || '3600',
+          },
+        };
+      },
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, GoogleOAuthStrategy],
   exports: [AuthService, JwtStrategy],
 })
 export class AuthModule {}

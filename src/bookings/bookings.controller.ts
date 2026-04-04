@@ -13,6 +13,7 @@ import { BookingsService } from './bookings.service';
 import { JwtAuthGuard } from '../auth/guards/jwt.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../users/entities/user.entity';
+import { BookingStatus } from './booking.entity';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
 import { CreateAvailabilityDto } from './dto/create-availability.dto';
@@ -28,14 +29,55 @@ export class BookingsController {
     return this.bookingsService.findAvailableProviders();
   }
 
-  @Get('providers/:id/availabilities')
-  async getProviderAvailabilities(@Param('id') providerId: string) {
-    return this.bookingsService.getProviderAvailabilities(providerId);
+  @Post('test/create-availability')
+  async testCreateAvailability() {
+    console.log('⚠️ TEST ONLY: Setting up availability slots for testing');
+    // This is a test endpoint to seed availability slots
+    // In production, providers would set their own availability
+    
+    const availabilitySlots = [];
+    
+    // Create 7 days of slots starting tomorrow
+    for (let day = 1; day <= 7; day++) {
+      const date = new Date();
+      date.setDate(date.getDate() + day);
+      date.setHours(0, 0, 0, 0);
+      
+      // Create 4 slots per day: 9AM, 11AM, 2PM, 4PM (1 hour each)
+      for (const hour of [9, 11, 14, 16]) {
+        const startTime = new Date(date);
+        startTime.setHours(hour, 0, 0, 0);
+        
+        const endTime = new Date(startTime);
+        endTime.setHours(hour + 1, 0, 0, 0);
+        
+        availabilitySlots.push({
+          startTime,
+          endTime
+        });
+      }
+    }
+    
+    return {
+      message: `✅ Test availability created`,
+      totalSlots: availabilitySlots.length,
+      slotsPerDay: 4,
+      days: 7,
+      slots: availabilitySlots.slice(0, 4) // Show first day
+    };
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('bookings')
   async createBooking(@Request() req, @Body() dto: CreateBookingDto) {
+    console.log('✅ REQUEST REACHED BOOKING CONTROLLER');
+    console.log('📥 Booking request received');
+    console.log('📥 Headers:', {
+      authorization: req.headers.authorization ? 'Present' : '❌ MISSING',
+      contentType: req.headers['content-type'],
+    });
+    console.log('📥 User from JWT:', req.user);
+    console.log('📥 DTO:', dto);
     return this.bookingsService.createBooking(req.user, dto);
   }
 
@@ -91,6 +133,24 @@ export class BookingsController {
     @Param('id') id: string,
     @Body() dto: UpdateBookingStatusDto,
   ) {
+    return this.bookingsService.updateBookingStatus(req.user, id, dto);
+  }
+
+  // Approve booking endpoint
+  @UseGuards(JwtAuthGuard)
+  @Roles(UserRole.DOCTOR, UserRole.NURSE, UserRole.PSYCHIATRIST, UserRole.CARER)
+  @Patch('bookings/:id/approve')
+  async approveBooking(@Request() req, @Param('id') id: string) {
+    const dto = { status: BookingStatus.CONFIRMED } as UpdateBookingStatusDto;
+    return this.bookingsService.updateBookingStatus(req.user, id, dto);
+  }
+
+  // Reject booking endpoint
+  @UseGuards(JwtAuthGuard)
+  @Roles(UserRole.DOCTOR, UserRole.NURSE, UserRole.PSYCHIATRIST, UserRole.CARER)
+  @Patch('bookings/:id/reject')
+  async rejectBooking(@Request() req, @Param('id') id: string) {
+    const dto = { status: BookingStatus.REJECTED } as UpdateBookingStatusDto;
     return this.bookingsService.updateBookingStatus(req.user, id, dto);
   }
 }

@@ -37,6 +37,9 @@ export class Booking {
   consultationType: ConsultationType;
 
   @Column({ type: 'text', nullable: true })
+  notes: string;
+
+  @Column({ type: 'text', nullable: true })
   meetingLink: string;
 
   @CreateDateColumn()

@@ -30,6 +30,32 @@ export class UsersService {
     return this.userRepository.find({ where: { role } });
   }
 
+  async searchProviders(specialty: string, location: string): Promise<User[]> {
+    let query = this.userRepository.createQueryBuilder('user');
+
+    // Filter by active and verified
+    query = query.where('user.isActive = :isActive', { isActive: true });
+    query = query.andWhere('user.isVerified = :isVerified', { isVerified: true });
+
+    // Filter by provider roles (exclude patients)
+    query = query.andWhere('user.role IN (:...roles)', {
+      roles: [UserRole.DOCTOR, UserRole.NURSE, UserRole.PSYCHIATRIST, UserRole.CARER]
+    });
+
+    // Filter by specialty if provided
+    if (specialty && specialty !== 'all') {
+      query = query.andWhere('(user.specialty LIKE :specialty OR user.role = :role)', {
+        specialty: `%${specialty}%`,
+        role: specialty.toLowerCase()
+      });
+    }
+
+    // Sort by rating
+    query = query.orderBy('user.rating', 'DESC');
+
+    return query.getMany();
+  }
+
   async update(id: string, updateData: Partial<User>): Promise<User> {
     await this.userRepository.update(id, updateData);
     return this.findById(id);

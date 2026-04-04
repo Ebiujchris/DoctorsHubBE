@@ -97,43 +97,71 @@ export class BookingsService {
 
   // booking management
   async createBooking(patient: User, dto: CreateBookingDto) {
+    console.log('📥 createBooking called with patient:', patient?.email);
+    console.log('📥 DTO:', dto);
+    
     if (patient.role !== UserRole.PATIENT) {
+      console.error('❌ User is not a patient, role:', patient.role);
       throw new ForbiddenException('Only patients can book');
     }
+    console.log('✅ Patient role verified');
+    
     const provider = await this.bookingRepo.manager.findOne(User, { where: { id: dto.providerId } });
-    if (!provider) throw new NotFoundException('Provider not found');
-
-    // find an availability slot that matches the requested time and is not booked
-    const slot = await this.availabilityRepo.findOne({
-      where: {
-        provider: { id: provider.id },
-        startTime: new Date(dto.startTime),
-        endTime: new Date(dto.endTime),
-        isBooked: false,
-      },
-    });
-    if (!slot) {
-      throw new BadRequestException('Selected time slot is no longer available');
+    if (!provider) {
+      console.error('❌ Provider not found:', dto.providerId);
+      throw new NotFoundException('Provider not found');
     }
+    console.log('✅ Provider found:', provider.email);
 
-    // mark slot booked
-    slot.isBooked = true;
-    await this.availabilityRepo.save(slot);
-
+    // Simplified: Don't require pre-existing availability slots
+    // Just create the booking directly (more flexible for real use)
     const booking = this.bookingRepo.create({
       patient,
       provider,
       startTime: new Date(dto.startTime),
       endTime: new Date(dto.endTime),
       consultationType: dto.consultationType,
+      notes: dto.notes || null,
+      status: BookingStatus.PENDING,
     });
     const saved = await this.bookingRepo.save(booking);
+    console.log('✅ Booking created successfully:', saved.id);
 
-    // notify provider
-    const link = `${process.env.BASE_URL || ''}/provider/dashboard`;
-    const providerMessage = `New booking request from ${patient.firstName} ${patient.lastName}. Please review: ${link}`;
-    this.notification.sendWhatsApp(provider.phone, providerMessage);
-    await this.notification.createNotification(provider, providerMessage);
+    // Notify provider via WhatsApp
+    const appointmentDate = new Date(dto.startTime).toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric'
+    });
+    const appointmentTime = new Date(dto.startTime).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+    const consultType = dto.consultationType === 'video' ? '📹 Video Consultation' : '👨‍⚕️ Physical Visit';
+    
+    const approveLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/appointments/${saved.id}/approve`;
+    const rejectLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/appointments/${saved.id}/reject`;
+
+    const providerMessage = 
+      `🏥 New Appointment Request\n\n` +
+      `Patient: ${patient.firstName} ${patient.lastName}\n` +
+      `Date: ${appointmentDate}\n` +
+      `Time: ${appointmentTime}\n` +
+      `Type: ${consultType}\n` +
+      `${patient.phone ? `Phone: ${patient.phone}\n` : ''}` +
+      `${dto.notes ? `Notes: ${dto.notes}\n\n` : '\n'}` +
+      `✅ Approve: ${approveLink}\n` +
+      `❌ Reject: ${rejectLink}`;
+
+    // Send WhatsApp notification
+    await this.notification.sendWhatsApp(provider.phone, providerMessage);
+    
+    // Create in-app notification
+    await this.notification.createNotification(
+      provider,
+      `New appointment request from ${patient.firstName} ${patient.lastName} for ${appointmentDate} at ${appointmentTime}`
+    );
 
     return saved;
   }
@@ -151,23 +179,66 @@ export class BookingsService {
     if (!booking) throw new NotFoundException('Booking not found');
     if (booking.provider.id !== provider.id) throw new ForbiddenException();
 
-    // only allow status transition from pending -> confirmed/rejected etc
-    booking.status = dto.status;
-    if (dto.meetingLink) booking.meetingLink = dto.meetingLink;
-    const result = await this.bookingRepo.save(booking);
+    if (booking.status !== BookingStatus.PENDING) {
+      throw new BadRequestException('Can only approve/reject pending bookings');
+    }
 
-    // notify patient
-    const patientMsgBase = `Your booking with ${provider.firstName} ${provider.lastName} is now ${booking.status}.`;
-    let patientMsg = patientMsgBase;
-    if (booking.status === BookingStatus.CONFIRMED) {
-      if (booking.consultationType === 'video' && booking.meetingLink) {
-        patientMsg += ` Join video consultation: ${booking.meetingLink}`;
-      } else {
-        patientMsg += ` Please arrive for your physical visit at the scheduled time.`;
+    // Update status
+    booking.status = dto.status;
+
+    // If approving, generate meeting link for video consultations
+    if (dto.status === BookingStatus.CONFIRMED) {
+      if (booking.consultationType === 'video') {
+        // Generate Jitsi meeting link
+        const meetingId = `consultation-${booking.id}-${Date.now()}`;
+        booking.meetingLink = `https://meet.jitsi.org/${meetingId}`;
       }
     }
-    this.notification.sendWhatsApp(booking.patient.phone, patientMsg);
-    await this.notification.createNotification(booking.patient, patientMsg);
+
+    const result = await this.bookingRepo.save(booking);
+
+    // Format dates/times for notification
+    const appointmentDate = new Date(booking.startTime).toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric'
+    });
+    const appointmentTime = new Date(booking.startTime).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    // Notify patient based on approval/rejection
+    let patientMsg = '';
+    if (dto.status === BookingStatus.CONFIRMED) {
+      patientMsg = 
+        `✅ Appointment Confirmed!\n\n` +
+        `Provider: ${provider.firstName} ${provider.lastName}\n` +
+        `Date: ${appointmentDate}\n` +
+        `Time: ${appointmentTime}\n`;
+      
+      if (booking.consultationType === 'video') {
+        patientMsg += `📹 Video Consultation\n` +
+          `Join Meeting: ${booking.meetingLink}`;
+      } else {
+        patientMsg += `👨‍⚕️ Physical Visit\n` +
+          `Please arrive at the scheduled time.`;
+      }
+    } else if (dto.status === BookingStatus.REJECTED) {
+      patientMsg = 
+        `❌ Appointment Declined\n\n` +
+        `Provider: ${provider.firstName} ${provider.lastName}\n` +
+        `Date: ${appointmentDate}\n` +
+        `Time: ${appointmentTime}\n\n` +
+        `Please try booking another time or with a different provider.`;
+    }
+
+    // Send WhatsApp notification
+    if (patientMsg) {
+      await this.notification.sendWhatsApp(booking.patient.phone, patientMsg);
+      await this.notification.createNotification(booking.patient, patientMsg);
+    }
 
     return result;
   }

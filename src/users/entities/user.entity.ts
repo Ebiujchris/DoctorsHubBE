@@ -35,10 +35,25 @@ export class User {
   @Column({ type: 'text', nullable: true })
   profilePicture: string;
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  specialty: string;
+
   @Column({ type: 'text', nullable: true })
   bio: string;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ type: 'decimal', precision: 2, scale: 1, default: 0 })
+  rating: number;
+
+  @Column({ type: 'int', default: 0 })
+  reviews: number;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  experience: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  responseTime: string;
+
+  @Column({ type: 'boolean', default: true })
   isVerified: boolean;
 
   @Column({ type: 'boolean', default: true })
