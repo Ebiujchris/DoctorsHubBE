@@ -97,14 +97,34 @@ export class BookingsService {
 
   // booking management
   async createBooking(patient: User, dto: CreateBookingDto) {
-    console.log('📥 createBooking called with patient:', patient?.email);
+    console.log('📥 createBooking called');
+    console.log('📥 Patient object:', { id: patient?.id, email: patient?.email, role: patient?.role });
     console.log('📥 DTO:', dto);
+    
+    // Validate patient object
+    if (!patient) {
+      console.error('❌ Patient object is null/undefined');
+      throw new ForbiddenException('User not authenticated');
+    }
+    
+    if (!patient.id) {
+      console.error('❌ Patient has no ID');
+      throw new ForbiddenException('Invalid user ID');
+    }
     
     if (patient.role !== UserRole.PATIENT) {
       console.error('❌ User is not a patient, role:', patient.role);
-      throw new ForbiddenException('Only patients can book');
+      throw new ForbiddenException('Only patients can book appointments');
     }
     console.log('✅ Patient role verified');
+    
+    // Validate DTO
+    if (!dto.providerId) {
+      throw new BadRequestException('Provider ID is required');
+    }
+    if (!dto.startTime || !dto.endTime) {
+      throw new BadRequestException('Start time and end time are required');
+    }
     
     const provider = await this.bookingRepo.manager.findOne(User, { where: { id: dto.providerId } });
     if (!provider) {
@@ -127,7 +147,7 @@ export class BookingsService {
     const saved = await this.bookingRepo.save(booking);
     console.log('✅ Booking created successfully:', saved.id);
 
-    // Notify provider via WhatsApp
+    // Notify provider via WhatsApp and in-app
     const appointmentDate = new Date(dto.startTime).toLocaleDateString('en-US', {
       weekday: 'short',
       month: 'short',
@@ -154,35 +174,83 @@ export class BookingsService {
       `✅ Approve: ${approveLink}\n` +
       `❌ Reject: ${rejectLink}`;
 
-    // Send WhatsApp notification
+    console.log('\ud83d\udce4 Sending notifications to provider:', provider.email);
+    
+    // Send WhatsApp notification to provider
     await this.notification.sendWhatsApp(provider.phone, providerMessage);
     
-    // Create in-app notification
-    await this.notification.createNotification(
-      provider,
-      `New appointment request from ${patient.firstName} ${patient.lastName} for ${appointmentDate} at ${appointmentTime}`
-    );
+    // Create in-app notification for provider
+    const providerNotification = `New appointment request from ${patient.firstName} ${patient.lastName} for ${appointmentDate} at ${appointmentTime}`;
+    await this.notification.createNotification(provider, providerNotification);
+
+    // Also send confirmation to patient
+    const patientConfirmation = `✅ Appointment request submitted to ${provider.firstName} ${provider.lastName}. Waiting for confirmation.`;
+    console.log('\ud83d\udce4 Sending confirmations to patient:', patient.email);
+    await this.notification.createNotification(patient, patientConfirmation);
 
     return saved;
   }
 
   async listPatientBookings(patient: User) {
-    return this.bookingRepo.find({ where: { patient } });
+    console.log('📥 listPatientBookings - Patient ID:', patient.id);
+    try {
+      const bookings = await this.bookingRepo.find({
+        where: { patient: { id: patient.id } },
+        relations: ['patient', 'provider'],
+        order: { createdAt: 'DESC' }
+      });
+      console.log('✅ Found bookings:', bookings.length);
+      return bookings;
+    } catch (error) {
+      console.error('❌ Error fetching patient bookings:', error.message);
+      throw error;
+    }
   }
 
   async listProviderBookings(provider: User) {
-    return this.bookingRepo.find({ where: { provider } });
+    console.log('📥 listProviderBookings - Provider ID:', provider.id);
+    try {
+      const bookings = await this.bookingRepo.find({
+        where: { provider: { id: provider.id } },
+        relations: ['patient', 'provider'],
+        order: { createdAt: 'DESC' }
+      });
+      console.log('✅ Found bookings:', bookings.length);
+      return bookings;
+    } catch (error) {
+      console.error('❌ Error fetching provider bookings:', error.message);
+      throw error;
+    }
   }
 
   async updateBookingStatus(provider: User, id: string, dto: UpdateBookingStatusDto) {
-    const booking = await this.bookingRepo.findOne({ where: { id } });
-    if (!booking) throw new NotFoundException('Booking not found');
-    if (booking.provider.id !== provider.id) throw new ForbiddenException();
+    console.log('📥 updateBookingStatus called');
+    console.log('   Booking ID:', id);
+    console.log('   New Status:', dto.status);
+    console.log('   Provider ID:', provider.id);
+    
+    const booking = await this.bookingRepo.findOne({
+      where: { id },
+      relations: ['patient', 'provider']
+    });
+    
+    if (!booking) {
+      console.error('❌ Booking not found:', id);
+      throw new NotFoundException('Booking not found');
+    }
+    
+    if (booking.provider.id !== provider.id) {
+      console.error('❌ Provider mismatch. Booking provider:', booking.provider.id, 'Current provider:', provider.id);
+      throw new ForbiddenException();
+    }
 
     if (booking.status !== BookingStatus.PENDING) {
+      console.error('❌ Cannot update non-pending booking. Current status:', booking.status);
       throw new BadRequestException('Can only approve/reject pending bookings');
     }
 
+    console.log('✅ Booking found and authorized. Updating status...');
+    
     // Update status
     booking.status = dto.status;
 
@@ -192,10 +260,12 @@ export class BookingsService {
         // Generate Jitsi meeting link
         const meetingId = `consultation-${booking.id}-${Date.now()}`;
         booking.meetingLink = `https://meet.jitsi.org/${meetingId}`;
+        console.log('📹 Generated meeting link:', booking.meetingLink);
       }
     }
 
     const result = await this.bookingRepo.save(booking);
+    console.log('✅ Booking status updated. New status:', result.status);
 
     // Format dates/times for notification
     const appointmentDate = new Date(booking.startTime).toLocaleDateString('en-US', {
@@ -211,7 +281,10 @@ export class BookingsService {
 
     // Notify patient based on approval/rejection
     let patientMsg = '';
+    let notificationTitle = '';
+    
     if (dto.status === BookingStatus.CONFIRMED) {
+      notificationTitle = '✅ Appointment Confirmed!';
       patientMsg = 
         `✅ Appointment Confirmed!\n\n` +
         `Provider: ${provider.firstName} ${provider.lastName}\n` +
@@ -226,6 +299,7 @@ export class BookingsService {
           `Please arrive at the scheduled time.`;
       }
     } else if (dto.status === BookingStatus.REJECTED) {
+      notificationTitle = '❌ Appointment Declined';
       patientMsg = 
         `❌ Appointment Declined\n\n` +
         `Provider: ${provider.firstName} ${provider.lastName}\n` +
@@ -234,12 +308,21 @@ export class BookingsService {
         `Please try booking another time or with a different provider.`;
     }
 
-    // Send WhatsApp notification
+    // Send notifications to patient
     if (patientMsg) {
-      await this.notification.sendWhatsApp(booking.patient.phone, patientMsg);
-      await this.notification.createNotification(booking.patient, patientMsg);
+      console.log('📧 Sending', notificationTitle, 'notifications to patient:', booking.patient.email);
+      
+      // WhatsApp notification
+      if (booking.patient.phone) {
+        await this.notification.sendWhatsApp(booking.patient.phone, patientMsg);
+      }
+      
+      // In-app notification
+      const inAppMsg = `${notificationTitle}: Appointment with ${provider.firstName} ${provider.lastName} on ${appointmentDate} at ${appointmentTime}`;
+      await this.notification.createNotification(booking.patient, inAppMsg);
     }
-
+    
+    console.log('✅ All notifications sent successfully');
     return result;
   }
 }

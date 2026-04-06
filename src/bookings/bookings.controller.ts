@@ -8,9 +8,12 @@ import {
   Request,
   Patch,
   Delete,
+  BadRequestException,
+  UnauthorizedException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
-import { JwtAuthGuard } from '../auth/guards/jwt.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../users/entities/user.entity';
 import { BookingStatus } from './booking.entity';
@@ -78,16 +81,53 @@ export class BookingsController {
     });
     console.log('📥 User from JWT:', req.user);
     console.log('📥 DTO:', dto);
+    
+    // Verify user is authenticated and is a patient
+    if (!req.user) {
+      console.error('❌ No user in request - JWT not validated');
+      throw new UnauthorizedException('User not authenticated');
+    }
+    
+    if (!req.user.id) {
+      console.error('❌ No user ID in JWT payload');
+      throw new UnauthorizedException('Invalid JWT payload - missing user ID');
+    }
+    
+    console.log('✅ JWT validated - Patient ID:', req.user.id);
+    console.log('✅ Patient email:', req.user.email);
+    
+    // Ensure providerId is in DTO
+    if (!dto.providerId) {
+      throw new BadRequestException('Provider ID is required');
+    }
+    
     return this.bookingsService.createBooking(req.user, dto);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('bookings')
   async getMyBookings(@Request() req) {
-    if (req.user.role === UserRole.PATIENT) {
-      return this.bookingsService.listPatientBookings(req.user);
-    } else {
-      return this.bookingsService.listProviderBookings(req.user);
+    console.log('📥 getMyBookings endpoint called');
+    console.log('📥 User:', { id: req.user.id, email: req.user.email, role: req.user.role });
+    
+    try {
+      if (req.user.role === UserRole.PATIENT) {
+        console.log('✅ User is patient - fetching patient bookings');
+        const bookings = await this.bookingsService.listPatientBookings(req.user);
+        console.log('✅ Returning bookings:', bookings.length);
+        return bookings;
+      } else if (req.user.role === UserRole.DOCTOR || req.user.role === UserRole.NURSE || req.user.role === UserRole.PSYCHIATRIST || req.user.role === UserRole.CARER) {
+        console.log('✅ User is provider - fetching provider bookings');
+        const bookings = await this.bookingsService.listProviderBookings(req.user);
+        console.log('✅ Returning bookings:', bookings.length);
+        return bookings;
+      } else {
+        console.error('❌ Unknown user role:', req.user.role);
+        throw new ForbiddenException('Invalid user role');
+      }
+    } catch (error) {
+      console.error('❌ Error in getMyBookings:', error.message);
+      throw error;
     }
   }
 

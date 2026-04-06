@@ -25,10 +25,19 @@ import { User } from '../users/entities/user.entity';
           console.error('❌ Check your .env file and ensure JWT_SECRET is set');
         }
 
+        const expirationStr = configService.get<string>('JWT_EXPIRATION') || '3600';
+        const expiresInSeconds = parseInt(expirationStr, 10);
+        
+        console.log('🔐 JWT Expiration config:', { 
+          rawValue: expirationStr, 
+          parsedSeconds: expiresInSeconds,
+          humanReadable: `${expiresInSeconds / 3600} hours`
+        });
+
         return {
           secret: secret || 'default_secret_key_change_this', // Fallback for debugging
           signOptions: {
-            expiresIn: configService.get<string>('JWT_EXPIRATION') || '3600',
+            expiresIn: expiresInSeconds, // Must be number (seconds)
           },
         };
       },

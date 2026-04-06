@@ -128,13 +128,29 @@ export class AuthService {
       lastName: user.lastName,
     };
     console.log('🔐 SIGNING TOKEN - Payload:', payload);
+    console.log('🔐 Current time:', new Date().toISOString());
+    
     const token = this.jwtService.sign(payload);
+    
     console.log('🔐 SIGNED TOKEN - First 50 chars:', token.substring(0, 50));
-    console.log('🔐 SIGNED TOKEN - Parts:', {
-      header: token.split('.')[0],
-      payload: token.split('.')[1],
-      signature: token.split('.')[2]?.substring(0, 20) + '...'
-    });
+    
+    // Decode to show expiration
+    try {
+      const parts = token.split('.');
+      const decoded = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+      const now = Math.floor(Date.now() / 1000);
+      const expiresIn = decoded.exp - now;
+      console.log('🔐 TOKEN DECODED:', {
+        iat: new Date(decoded.iat * 1000).toISOString(),
+        exp: new Date(decoded.exp * 1000).toISOString(),
+        expiresInSeconds: expiresIn,
+        expiresInHours: (expiresIn / 3600).toFixed(2),
+        isAlreadyExpired: expiresIn < 0 ? '❌ YES - PROBLEM!' : '✅ NO'
+      });
+    } catch (e) {
+      console.error('❌ Failed to decode token:', e.message);
+    }
+    
     return token;
   }
 
