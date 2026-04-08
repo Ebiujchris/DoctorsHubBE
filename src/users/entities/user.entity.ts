@@ -53,6 +53,9 @@ export class User {
   @Column({ type: 'varchar', length: 50, nullable: true })
   responseTime: string;
 
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  fees: string;
+
   @Column({ type: 'boolean', default: true })
   isVerified: boolean;
 

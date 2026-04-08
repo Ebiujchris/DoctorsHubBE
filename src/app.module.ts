@@ -5,6 +5,9 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { NotificationModule } from './notifications/notification.module';
 import { BookingsModule } from './bookings/bookings.module';
+import { ReviewsModule } from './reviews/reviews.module';
+import { ChatModule } from './chat/chat.module';
+import { MedicalModule } from './medical/medical.module';
 
 
 @Module({
@@ -39,6 +42,9 @@ import { BookingsModule } from './bookings/bookings.module';
     UsersModule,
     NotificationModule,
     BookingsModule,
+    ReviewsModule,
+    ChatModule,
+    MedicalModule,
   ],
   controllers: [],
   providers: [],

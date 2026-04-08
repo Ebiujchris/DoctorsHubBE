@@ -9,6 +9,7 @@ import { CreateAvailabilityDto } from './dto/create-availability.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 import { User, UserRole } from '../users/entities/user.entity';
 import { NotificationService } from '../notifications/notification.service';
+import { NotificationType } from '../notifications/notification.entity';
 
 @Injectable()
 export class BookingsService {
@@ -181,12 +182,12 @@ export class BookingsService {
     
     // Create in-app notification for provider
     const providerNotification = `New appointment request from ${patient.firstName} ${patient.lastName} for ${appointmentDate} at ${appointmentTime}`;
-    await this.notification.createNotification(provider, providerNotification);
+    await this.notification.createNotification(provider, providerNotification, NotificationType.BOOKING_CREATED);
 
     // Also send confirmation to patient
     const patientConfirmation = `✅ Appointment request submitted to ${provider.firstName} ${provider.lastName}. Waiting for confirmation.`;
     console.log('\ud83d\udce4 Sending confirmations to patient:', patient.email);
-    await this.notification.createNotification(patient, patientConfirmation);
+    await this.notification.createNotification(patient, patientConfirmation, NotificationType.BOOKING_CREATED);
 
     return saved;
   }
@@ -318,11 +319,54 @@ export class BookingsService {
       }
       
       // In-app notification
+      const notifType = dto.status === BookingStatus.CONFIRMED
+        ? NotificationType.BOOKING_CONFIRMED
+        : NotificationType.BOOKING_REJECTED;
       const inAppMsg = `${notificationTitle}: Appointment with ${provider.firstName} ${provider.lastName} on ${appointmentDate} at ${appointmentTime}`;
-      await this.notification.createNotification(booking.patient, inAppMsg);
+      await this.notification.createNotification(booking.patient, inAppMsg, notifType);
     }
     
     console.log('✅ All notifications sent successfully');
+    return result;
+  }
+
+  async cancelBooking(user: User, id: string) {
+    const booking = await this.bookingRepo.findOne({
+      where: { id },
+      relations: ['patient', 'provider'],
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    const isPatient = booking.patient.id === user.id;
+    const isProvider = booking.provider.id === user.id;
+    if (!isPatient && !isProvider) throw new ForbiddenException();
+
+    if (booking.status === BookingStatus.CANCELLED) {
+      throw new BadRequestException('Booking is already cancelled');
+    }
+
+    booking.status = BookingStatus.CANCELLED;
+    const result = await this.bookingRepo.save(booking);
+
+    const appointmentDate = new Date(booking.startTime).toLocaleDateString('en-US', {
+      weekday: 'short', month: 'short', day: 'numeric',
+    });
+    const appointmentTime = new Date(booking.startTime).toLocaleTimeString('en-US', {
+      hour: '2-digit', minute: '2-digit', hour12: true,
+    });
+
+    if (isPatient) {
+      // Notify provider that patient cancelled
+      const msg = `❌ Appointment Cancelled: ${booking.patient.firstName} ${booking.patient.lastName} cancelled their appointment on ${appointmentDate} at ${appointmentTime}.`;
+      await this.notification.sendWhatsApp(booking.provider.phone, msg);
+      await this.notification.createNotification(booking.provider, msg, NotificationType.BOOKING_CANCELLED);
+    } else {
+      // Notify patient that provider cancelled
+      const msg = `❌ Appointment Cancelled: Your appointment with ${booking.provider.firstName} ${booking.provider.lastName} on ${appointmentDate} at ${appointmentTime} has been cancelled.`;
+      await this.notification.sendWhatsApp(booking.patient.phone, msg);
+      await this.notification.createNotification(booking.patient, msg, NotificationType.BOOKING_CANCELLED);
+    }
+
     return result;
   }
 }

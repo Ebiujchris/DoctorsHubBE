@@ -32,6 +32,12 @@ export class BookingsController {
     return this.bookingsService.findAvailableProviders();
   }
 
+  // Public: get a specific provider's available slots (for patients booking)
+  @Get('providers/:id/availabilities')
+  async getProviderAvailabilities(@Param('id') id: string) {
+    return this.bookingsService.getProviderAvailabilities(id);
+  }
+
   @Post('test/create-availability')
   async testCreateAvailability() {
     console.log('⚠️ TEST ONLY: Setting up availability slots for testing');
@@ -192,5 +198,12 @@ export class BookingsController {
   async rejectBooking(@Request() req, @Param('id') id: string) {
     const dto = { status: BookingStatus.REJECTED } as UpdateBookingStatusDto;
     return this.bookingsService.updateBookingStatus(req.user, id, dto);
+  }
+
+  // Cancel booking endpoint (patient or provider)
+  @UseGuards(JwtAuthGuard)
+  @Patch('bookings/:id/cancel')
+  async cancelBooking(@Request() req, @Param('id') id: string) {
+    return this.bookingsService.cancelBooking(req.user, id);
   }
 }

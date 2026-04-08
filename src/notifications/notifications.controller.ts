@@ -7,21 +7,27 @@ export class NotificationsController {
   constructor(private notification: NotificationService) {}
 
   @UseGuards(JwtAuthGuard)
+  @Get('unread-count')
+  async unreadCount(@Request() req) {
+    const count = await this.notification.unreadCount(req.user);
+    return { count };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('mark-all-read')
+  async markAllRead(@Request() req) {
+    return this.notification.markAllRead(req.user);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get()
   async list(@Request() req) {
-    console.log('📥 GET /notifications - User:', req.user.email);
-    const notifications = await this.notification.listForUser(req.user);
-    console.log('📤 Returning', notifications.length, 'notifications');
-    return notifications;
+    return this.notification.listForUser(req.user);
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id/read')
   async markAsRead(@Request() req, @Param('id') id: string) {
-    console.log('📥 PATCH /notifications/:id/read');
-    console.log('   Notification ID:', id);
-    console.log('   User:', req.user.email);
-    
     return this.notification.markAsRead(id, req.user);
   }
 }
