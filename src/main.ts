@@ -11,6 +11,8 @@ async function bootstrap() {
     'http://localhost:3001',
     'https://doctors-hub-be-git-main-ebiu-julius-projects.vercel.app',
     process.env.FRONTEND_URL, // Add from env for flexibility
+    /\.railway\.app$/, // Allow all Railway frontend URLs
+    /\.onrender\.com$/, // Allow all Render URLs (if switching back)
   ].filter(Boolean);
 
   app.enableCors({
@@ -30,7 +32,12 @@ async function bootstrap() {
   );
 
   const port = process.env.PORT || 3000;
-  await app.listen(port);
-  console.log(`Application is running on: http://localhost:${port}`);
+  await app.listen(port, '0.0.0.0'); // Bind to all interfaces for Railway
+  console.log(`🚀 Application is running on: http://0.0.0.0:${port}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
 }
-bootstrap();
+
+bootstrap().catch(err => {
+  console.error('❌ Error starting application:', err);
+  process.exit(1);
+});

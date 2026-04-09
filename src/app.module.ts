@@ -6,8 +6,10 @@ import { UsersModule } from './users/users.module';
 import { NotificationModule } from './notifications/notification.module';
 import { BookingsModule } from './bookings/bookings.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { TestimonialsModule } from './testimonials/testimonials.module';
 import { ChatModule } from './chat/chat.module';
 import { MedicalModule } from './medical/medical.module';
+import { HealthController } from './health/health.controller';
 
 
 @Module({
@@ -43,10 +45,11 @@ import { MedicalModule } from './medical/medical.module';
     NotificationModule,
     BookingsModule,
     ReviewsModule,
+    TestimonialsModule,
     ChatModule,
     MedicalModule,
   ],
-  controllers: [],
+  controllers: [HealthController],
   providers: [],
 })
 export class AppModule {}
