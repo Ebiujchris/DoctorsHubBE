@@ -206,4 +206,11 @@ export class BookingsController {
   async cancelBooking(@Request() req, @Param('id') id: string) {
     return this.bookingsService.cancelBooking(req.user, id);
   }
+
+  // Get single booking by ID
+  @UseGuards(JwtAuthGuard)
+  @Get('bookings/:id')
+  async getBooking(@Request() req, @Param('id') id: string) {
+    return this.bookingsService.getBookingById(req.user, id);
+  }
 }

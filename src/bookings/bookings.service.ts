@@ -330,6 +330,18 @@ export class BookingsService {
     return result;
   }
 
+  async getBookingById(user: User, id: string) {
+    const booking = await this.bookingRepo.findOne({
+      where: { id },
+      relations: ['patient', 'provider'],
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.patient.id !== user.id && booking.provider.id !== user.id) {
+      throw new ForbiddenException();
+    }
+    return booking;
+  }
+
   async cancelBooking(user: User, id: string) {
     const booking = await this.bookingRepo.findOne({
       where: { id },
