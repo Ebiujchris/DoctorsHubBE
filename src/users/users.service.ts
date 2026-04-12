@@ -33,9 +33,10 @@ export class UsersService {
   async searchProviders(specialty: string, location: string): Promise<User[]> {
     let query = this.userRepository.createQueryBuilder('user');
 
-    // Filter by active and verified
+    // Filter by active, verified, and approved providers only
     query = query.where('user.isActive = :isActive', { isActive: true });
     query = query.andWhere('user.isVerified = :isVerified', { isVerified: true });
+    query = query.andWhere('user.isApproved = :isApproved', { isApproved: true });
 
     // Filter by provider roles (exclude patients)
     query = query.andWhere('user.role IN (:...roles)', {
@@ -73,6 +74,14 @@ export class UsersService {
     await this.userRepository.update(id, { isVerified: true });
   }
 
+  async approve(id: string): Promise<void> {
+    await this.userRepository.update(id, { isApproved: true });
+  }
+
+  async reject(id: string): Promise<void> {
+    await this.userRepository.update(id, { isApproved: false });
+  }
+
   // Admin dashboard methods
   async getTotalUsersCount(): Promise<number> {
     return this.userRepository.count();
@@ -92,10 +101,10 @@ export class UsersService {
   async getPendingProvidersCount(): Promise<number> {
     return this.userRepository.count({
       where: [
-        { role: UserRole.DOCTOR, isVerified: false },
-        { role: UserRole.NURSE, isVerified: false },
-        { role: UserRole.PSYCHIATRIST, isVerified: false },
-        { role: UserRole.CARER, isVerified: false }
+        { role: UserRole.DOCTOR, isApproved: false },
+        { role: UserRole.NURSE, isApproved: false },
+        { role: UserRole.PSYCHIATRIST, isApproved: false },
+        { role: UserRole.CARER, isApproved: false }
       ]
     });
   }
@@ -115,9 +124,9 @@ export class UsersService {
       });
 
     if (status === 'pending') {
-      query.andWhere('user.isVerified = :verified', { verified: false });
+      query.andWhere('user.isApproved = :approved', { approved: false });
     } else if (status === 'approved') {
-      query.andWhere('user.isVerified = :verified', { verified: true });
+      query.andWhere('user.isApproved = :approved', { approved: true });
     } else if (status === 'suspended') {
       query.andWhere('user.isActive = :active', { active: false });
     }
@@ -202,5 +211,18 @@ export class UsersService {
       console.error('Error getting popular specialties:', error);
       return [];
     }
+  }
+
+  // Additional methods for admin notifications
+  async findByIds(userIds: string[]): Promise<User[]> {
+    return this.userRepository.find({
+      where: userIds.map(id => ({ id }))
+    });
+  }
+
+  async findAllActiveUsers(): Promise<User[]> {
+    return this.userRepository.find({
+      where: { isActive: true }
+    });
   }
 }

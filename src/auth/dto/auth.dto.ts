@@ -54,6 +54,7 @@ export class UserResponseDto {
   responseTime?: string;
   isVerified: boolean;
   isActive: boolean;
+  isApproved: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

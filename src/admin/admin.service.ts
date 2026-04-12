@@ -10,7 +10,9 @@ import { AdminRegisterDto } from './dto/admin-register.dto';
 import { UsersService } from '../users/users.service';
 import { BookingsService } from '../bookings/bookings.service';
 import { TestimonialsService } from '../testimonials/testimonials.service';
-import { UserRole } from '../users/entities/user.entity';
+import { NotificationService } from '../notifications/notification.service';
+import { NotificationType } from '../notifications/notification.entity';
+import { UserRole, User } from '../users/entities/user.entity';
 
 @Injectable()
 export class AdminService {
@@ -25,6 +27,7 @@ export class AdminService {
     private usersService: UsersService,
     private bookingsService: BookingsService,
     private testimonialsService: TestimonialsService,
+    private notificationService: NotificationService,
   ) {}
 
   async register(adminRegisterDto: AdminRegisterDto) {
@@ -221,18 +224,85 @@ export class AdminService {
     targetUsers?: string[] 
   }) {
     try {
-      // This is a basic implementation
-      // In production, you'd integrate with a proper notification service
-      console.log('📢 System notification sent:', notification);
+      const { title, message, type, targetUsers } = notification;
+      
+      console.log('📢 Starting notification broadcast:', { title, message, type, targetUsers });
+      
+      // If no specific target users, send to all users
+      let users: User[];
+      if (targetUsers && targetUsers.length > 0) {
+        // Send to specific users
+        console.log('🎯 Sending to specific users:', targetUsers);
+        users = await this.usersService.findByIds(targetUsers);
+      } else {
+        // Send to all active users
+        console.log('📡 Sending to all active users');
+        users = await this.usersService.findAllActiveUsers();
+      }
+
+      console.log(`👥 Found ${users.length} users to notify`);
+
+      // Create notification for each user
+      const createdNotifications = [];
+      for (const user of users) {
+        try {
+          const notificationMessage = title ? `${title}: ${message}` : message;
+          const notificationType = this.mapNotificationType(type);
+          
+          console.log(`📝 Creating notification for user ${user.id} (${user.email})`);
+          
+          // Create notification using the notification service
+          const createdNotification = await this.notificationService.createNotification(
+            user, 
+            notificationMessage, 
+            notificationType
+          );
+          createdNotifications.push(createdNotification);
+          
+          console.log(`✅ Notification created for user ${user.id}:`, createdNotification.id);
+        } catch (error) {
+          console.error(`❌ Failed to create notification for user ${user.id}:`, error);
+        }
+      }
+      
+      console.log(`📢 System notification sent to ${createdNotifications.length} users:`, {
+        title,
+        message,
+        type,
+        recipientCount: createdNotifications.length
+      });
       
       return {
         message: 'Notification sent successfully',
-        notification,
+        notification: {
+          title,
+          message,
+          type,
+          recipientCount: createdNotifications.length
+        },
         sentAt: new Date().toISOString()
       };
     } catch (error) {
-      console.error('Error sending notification:', error);
+      console.error('❌ Error sending notification:', error);
       throw error;
+    }
+  }
+
+  private mapNotificationType(type: string): NotificationType {
+    // Map admin notification types to NotificationType enum
+    switch (type.toLowerCase()) {
+      case 'booking':
+        return NotificationType.BOOKING_CREATED;
+      case 'general':
+      case 'system':
+      case 'announcement':
+      case 'info':
+      case 'success':
+      case 'warning':
+      case 'error':
+      case 'maintenance':
+      default:
+        return NotificationType.GENERAL;
     }
   }
 

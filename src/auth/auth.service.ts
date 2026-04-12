@@ -171,6 +171,7 @@ export class AuthService {
       responseTime: user.responseTime,
       isVerified: user.isVerified,
       isActive: user.isActive,
+      isApproved: user.isApproved,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };

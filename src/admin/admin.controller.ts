@@ -162,8 +162,20 @@ export class AdminController {
       throw new UnauthorizedException('Admin access required');
     }
 
-    await this.usersService.verify(id);
+    await this.usersService.approve(id);
     return { message: 'Provider approved successfully' };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('providers/:id/reject')
+  async rejectProvider(@Request() req, @Param('id') id: string, @Body() body: { reason: string }) {
+    const user = req.user;
+    if (!user || (user.role !== 'admin' && !user.email?.includes('admin'))) {
+      throw new UnauthorizedException('Admin access required');
+    }
+
+    await this.usersService.reject(id);
+    return { message: 'Provider rejected successfully', reason: body.reason };
   }
 
   @UseGuards(JwtAuthGuard)

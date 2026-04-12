@@ -49,7 +49,7 @@ export class UsersController {
   async getFeaturedDoctors() {
     const doctors = await this.usersService.findByRole(UserRole.DOCTOR);
     return doctors
-      .filter(doc => doc.isActive && doc.isVerified)
+      .filter(doc => doc.isActive && doc.isVerified && doc.isApproved)
       .sort((a, b) => b.rating - a.rating)
       .slice(0, 6);
   }
@@ -59,7 +59,7 @@ export class UsersController {
   async getFeaturedNurses() {
     const nurses = await this.usersService.findByRole(UserRole.NURSE);
     return nurses
-      .filter(nurse => nurse.isActive && nurse.isVerified)
+      .filter(nurse => nurse.isActive && nurse.isVerified && nurse.isApproved)
       .sort((a, b) => b.rating - a.rating)
       .slice(0, 6);
   }
@@ -69,7 +69,7 @@ export class UsersController {
   async getFeaturedCarers() {
     const carers = await this.usersService.findByRole(UserRole.CARER);
     return carers
-      .filter(carer => carer.isActive && carer.isVerified)
+      .filter(carer => carer.isActive && carer.isVerified && carer.isApproved)
       .sort((a, b) => b.rating - a.rating)
       .slice(0, 6);
   }
@@ -79,7 +79,7 @@ export class UsersController {
   async getFeaturedPsychiatrists() {
     const psychiatrists = await this.usersService.findByRole(UserRole.PSYCHIATRIST);
     return psychiatrists
-      .filter(psy => psy.isActive && psy.isVerified)
+      .filter(psy => psy.isActive && psy.isVerified && psy.isApproved)
       .sort((a, b) => b.rating - a.rating)
       .slice(0, 6);
   }

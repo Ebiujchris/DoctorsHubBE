@@ -10,6 +10,7 @@ import { UsersModule } from '../users/users.module';
 import { BookingsModule } from '../bookings/bookings.module';
 import { TestimonialsModule } from '../testimonials/testimonials.module';
 import { ReviewsModule } from '../reviews/reviews.module';
+import { NotificationModule } from '../notifications/notification.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { ReviewsModule } from '../reviews/reviews.module';
     BookingsModule,
     TestimonialsModule,
     ReviewsModule,
+    NotificationModule,
   ],
   controllers: [AdminController],
   providers: [AdminService],
