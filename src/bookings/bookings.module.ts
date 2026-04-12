@@ -14,5 +14,6 @@ import { User } from '../users/entities/user.entity';
   ],
   providers: [BookingsService],
   controllers: [BookingsController],
+  exports: [BookingsService],
 })
 export class BookingsModule {}

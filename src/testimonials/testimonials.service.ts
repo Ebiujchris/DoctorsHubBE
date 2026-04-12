@@ -78,6 +78,28 @@ export class TestimonialsService {
     });
   }
 
+  async getPendingCount(): Promise<number> {
+    return this.testimonialRepo.count({
+      where: { isApproved: false }
+    });
+  }
+
+  async rejectTestimonial(id: string, reason?: string): Promise<{ message: string; reason?: string }> {
+    const testimonial = await this.testimonialRepo.findOne({ where: { id } });
+    if (!testimonial) {
+      throw new BadRequestException('Testimonial not found');
+    }
+    
+    // For now, we'll delete rejected testimonials
+    // In production, you might want to add a 'status' field with 'pending', 'approved', 'rejected'
+    await this.testimonialRepo.remove(testimonial);
+    
+    return { 
+      message: 'Testimonial rejected and removed',
+      reason: reason || 'No reason provided'
+    };
+  }
+
   private formatDate(date: Date): string {
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());

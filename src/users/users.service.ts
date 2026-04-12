@@ -72,4 +72,135 @@ export class UsersService {
   async verify(id: string): Promise<void> {
     await this.userRepository.update(id, { isVerified: true });
   }
+
+  // Admin dashboard methods
+  async getTotalUsersCount(): Promise<number> {
+    return this.userRepository.count();
+  }
+
+  async getProvidersCount(): Promise<number> {
+    return this.userRepository.count({
+      where: [
+        { role: UserRole.DOCTOR },
+        { role: UserRole.NURSE },
+        { role: UserRole.PSYCHIATRIST },
+        { role: UserRole.CARER }
+      ]
+    });
+  }
+
+  async getPendingProvidersCount(): Promise<number> {
+    return this.userRepository.count({
+      where: [
+        { role: UserRole.DOCTOR, isVerified: false },
+        { role: UserRole.NURSE, isVerified: false },
+        { role: UserRole.PSYCHIATRIST, isVerified: false },
+        { role: UserRole.CARER, isVerified: false }
+      ]
+    });
+  }
+
+  async getRecentUsers(limit: number = 10): Promise<User[]> {
+    return this.userRepository.find({
+      order: { createdAt: 'DESC' },
+      take: limit
+    });
+  }
+
+  // Admin methods for provider management
+  async getProviders(page: number = 1, limit: number = 20, status: string = 'all') {
+    const query = this.userRepository.createQueryBuilder('user')
+      .where('user.role IN (:...roles)', {
+        roles: [UserRole.DOCTOR, UserRole.NURSE, UserRole.PSYCHIATRIST, UserRole.CARER]
+      });
+
+    if (status === 'pending') {
+      query.andWhere('user.isVerified = :verified', { verified: false });
+    } else if (status === 'approved') {
+      query.andWhere('user.isVerified = :verified', { verified: true });
+    } else if (status === 'suspended') {
+      query.andWhere('user.isActive = :active', { active: false });
+    }
+
+    const total = await query.getCount();
+    const providers = await query
+      .orderBy('user.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    return {
+      providers,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      limit
+    };
+  }
+
+  // Admin methods for patient management
+  async getPatients(page: number = 1, limit: number = 20) {
+    const query = this.userRepository.createQueryBuilder('user')
+      .where('user.role = :role', { role: UserRole.PATIENT });
+
+    const total = await query.getCount();
+    const patients = await query
+      .orderBy('user.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    return {
+      patients,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      limit
+    };
+  }
+
+  // Analytics methods
+  async getUserGrowthData(startDate: Date) {
+    try {
+      const users = await this.userRepository
+        .createQueryBuilder('user')
+        .select('DATE(user.createdAt) as date, COUNT(*) as count')
+        .where('user.createdAt >= :startDate', { startDate })
+        .groupBy('DATE(user.createdAt)')
+        .orderBy('date', 'ASC')
+        .getRawMany();
+
+      return users.map(item => ({
+        date: item.date,
+        users: parseInt(item.count)
+      }));
+    } catch (error) {
+      console.error('Error getting user growth data:', error);
+      return [];
+    }
+  }
+
+  async getPopularSpecialties() {
+    try {
+      const specialties = await this.userRepository
+        .createQueryBuilder('user')
+        .select('user.specialty, COUNT(*) as count')
+        .where('user.role IN (:...roles)', {
+          roles: [UserRole.DOCTOR, UserRole.NURSE, UserRole.PSYCHIATRIST, UserRole.CARER]
+        })
+        .andWhere('user.specialty IS NOT NULL')
+        .groupBy('user.specialty')
+        .orderBy('count', 'DESC')
+        .limit(10)
+        .getRawMany();
+
+      return specialties.map(item => ({
+        specialty: item.specialty,
+        count: parseInt(item.count)
+      }));
+    } catch (error) {
+      console.error('Error getting popular specialties:', error);
+      return [];
+    }
+  }
 }

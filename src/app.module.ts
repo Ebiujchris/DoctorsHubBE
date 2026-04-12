@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule, RequestMethod } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
@@ -9,7 +9,10 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { TestimonialsModule } from './testimonials/testimonials.module';
 import { ChatModule } from './chat/chat.module';
 import { MedicalModule } from './medical/medical.module';
+import { AdminModule } from './admin/admin.module';
 import { HealthController } from './health/health.controller';
+import { MaintenanceMiddleware } from './common/middleware/maintenance.middleware';
+import { SystemSettings } from './admin/system-settings.entity';
 
 
 @Module({
@@ -48,8 +51,26 @@ import { HealthController } from './health/health.controller';
     TestimonialsModule,
     ChatModule,
     MedicalModule,
+    AdminModule,
+    // Add SystemSettings to the main module for middleware access
+    TypeOrmModule.forFeature([SystemSettings]),
   ],
   controllers: [HealthController],
   providers: [],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(MaintenanceMiddleware)
+      .exclude(
+        // Exclude admin routes
+        { path: 'admin*', method: RequestMethod.ALL },
+        // Exclude health checks
+        { path: 'health*', method: RequestMethod.ALL },
+        // Exclude static assets
+        { path: '_next*', method: RequestMethod.ALL },
+        { path: 'favicon*', method: RequestMethod.ALL }
+      )
+      .forRoutes('*');
+  }
+}

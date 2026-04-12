@@ -9,6 +9,7 @@ async function bootstrap() {
   const allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:3001',
+    'http://localhost:3003', // Admin dashboard
     'https://doctors-hub-be-git-main-ebiu-julius-projects.vercel.app',
     process.env.FRONTEND_URL, // Add from env for flexibility
     /\.railway\.app$/, // Allow all Railway frontend URLs

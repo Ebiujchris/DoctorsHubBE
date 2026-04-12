@@ -60,4 +60,67 @@ export class ReviewsService {
   async getByBooking(bookingId: string): Promise<Review | null> {
     return this.reviewRepo.findOne({ where: { booking: { id: bookingId } } });
   }
+
+  // Admin methods for review management
+  async getReviewsForAdmin(page: number = 1, limit: number = 20, status: string = 'all') {
+    const query = this.reviewRepo.createQueryBuilder('review')
+      .leftJoinAndSelect('review.patient', 'patient')
+      .leftJoinAndSelect('review.provider', 'provider')
+      .leftJoinAndSelect('review.booking', 'booking');
+
+    // For now, all reviews are considered 'active' since we don't have moderation status
+    // You could add a 'status' field to the Review entity for proper moderation
+
+    const total = await query.getCount();
+    const reviews = await query
+      .orderBy('review.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    return {
+      reviews,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      limit
+    };
+  }
+
+  async moderateReview(id: string, action: string, reason?: string) {
+    const review = await this.reviewRepo.findOne({
+      where: { id },
+      relations: ['patient', 'provider']
+    });
+
+    if (!review) {
+      throw new NotFoundException('Review not found');
+    }
+
+    if (action === 'delete') {
+      await this.reviewRepo.remove(review);
+      
+      // Recalculate provider's rating after deletion
+      const remainingReviews = await this.reviewRepo.find({ 
+        where: { provider: { id: review.provider.id } } 
+      });
+      
+      if (remainingReviews.length > 0) {
+        const avg = remainingReviews.reduce((sum, r) => sum + r.rating, 0) / remainingReviews.length;
+        await this.userRepo.update(review.provider.id, {
+          rating: Math.round(avg * 10) / 10,
+          reviews: remainingReviews.length,
+        });
+      } else {
+        await this.userRepo.update(review.provider.id, {
+          rating: 0,
+          reviews: 0,
+        });
+      }
+
+      return { message: 'Review deleted successfully', reason };
+    }
+
+    return { message: `Review ${action} completed`, reason };
+  }
 }

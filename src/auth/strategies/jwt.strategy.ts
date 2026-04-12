@@ -29,7 +29,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(payload: any) {
     console.log('🔐 VALIDATING TOKEN');
-    console.log('🔐 Decoded payload:', { sub: payload.sub, email: payload.email });
+    console.log('🔐 Decoded payload:', { sub: payload.sub, email: payload.email, role: payload.role });
     
     const now = Math.floor(Date.now() / 1000);
     const expiresIn = payload.exp - now;
@@ -52,18 +52,35 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
     
     try {
-      const user = await this.authService.validateUser(payload.sub);
-      console.log('✅ TOKEN VALIDATED SUCCESSFULLY - User:', payload.email);
-      const result = {
-        id: user.id,
-        sub: user.id, // Include both id and sub for compatibility
-        email: user.email,
-        role: user.role,
-        firstName: user.firstName,
-        lastName: user.lastName,
-      };
-      console.log('✅ Returning user object:', { id: result.id, email: result.email, role: result.role });
-      return result;
+      // Check if this is an admin token
+      if (payload.role === 'admin') {
+        console.log('🔐 Admin token detected, validating admin user');
+        // For admin tokens, we'll trust the payload since it was signed by our server
+        const result = {
+          id: payload.sub,
+          sub: payload.sub,
+          email: payload.email,
+          role: 'admin',
+          firstName: payload.name || 'Admin',
+          lastName: '',
+        };
+        console.log('✅ Admin token validated:', { id: result.id, email: result.email, role: result.role });
+        return result;
+      } else {
+        // Regular user validation
+        const user = await this.authService.validateUser(payload.sub);
+        console.log('✅ TOKEN VALIDATED SUCCESSFULLY - User:', payload.email);
+        const result = {
+          id: user.id,
+          sub: user.id,
+          email: user.email,
+          role: user.role,
+          firstName: user.firstName,
+          lastName: user.lastName,
+        };
+        console.log('✅ Returning user object:', { id: result.id, email: result.email, role: result.role });
+        return result;
+      }
     } catch (error) {
       console.error('❌ TOKEN VALIDATION FAILED:', error.message);
       throw new UnauthorizedException('Token validation failed: ' + error.message);

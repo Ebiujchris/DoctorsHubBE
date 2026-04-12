@@ -381,4 +381,97 @@ export class BookingsService {
 
     return result;
   }
+
+  // Admin dashboard methods
+  async getTotalBookingsCount(): Promise<number> {
+    return this.bookingRepo.count();
+  }
+
+  async getActiveBookingsCount(): Promise<number> {
+    return this.bookingRepo.count({
+      where: {
+        status: BookingStatus.CONFIRMED
+      }
+    });
+  }
+
+  async getRecentBookings(limit: number = 10): Promise<any[]> {
+    return this.bookingRepo.find({
+      relations: ['patient', 'provider'],
+      order: { createdAt: 'DESC' },
+      take: limit
+    });
+  }
+
+  // Admin methods for appointment management
+  async getAppointmentsForAdmin(page: number = 1, limit: number = 20, status: string = 'all') {
+    const query = this.bookingRepo.createQueryBuilder('booking')
+      .leftJoinAndSelect('booking.patient', 'patient')
+      .leftJoinAndSelect('booking.provider', 'provider');
+
+    if (status !== 'all') {
+      query.where('booking.status = :status', { status });
+    }
+
+    const total = await query.getCount();
+    const appointments = await query
+      .orderBy('booking.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    return {
+      appointments,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      limit
+    };
+  }
+
+  async updateAppointmentStatusByAdmin(id: string, status: string, reason?: string) {
+    const booking = await this.bookingRepo.findOne({
+      where: { id },
+      relations: ['patient', 'provider']
+    });
+
+    if (!booking) {
+      throw new Error('Appointment not found');
+    }
+
+    // Validate status
+    const validStatuses = Object.values(BookingStatus);
+    if (!validStatuses.includes(status as BookingStatus)) {
+      throw new Error('Invalid status');
+    }
+
+    booking.status = status as BookingStatus;
+    await this.bookingRepo.save(booking);
+
+    return {
+      message: `Appointment status updated to ${status}`,
+      reason: reason || 'Updated by admin'
+    };
+  }
+
+  // Analytics methods
+  async getAppointmentTrends(startDate: Date) {
+    try {
+      const appointments = await this.bookingRepo
+        .createQueryBuilder('booking')
+        .select('DATE(booking.createdAt) as date, COUNT(*) as count')
+        .where('booking.createdAt >= :startDate', { startDate })
+        .groupBy('DATE(booking.createdAt)')
+        .orderBy('date', 'ASC')
+        .getRawMany();
+
+      return appointments.map(item => ({
+        date: item.date,
+        appointments: parseInt(item.count)
+      }));
+    } catch (error) {
+      console.error('Error getting appointment trends:', error);
+      return [];
+    }
+  }
 }
